@@ -14,6 +14,27 @@ declare namespace Eris {
   export const VERSION: string;
 
   // TYPES
+
+  type InteractionOptions = {
+    allowedMentions?: AllowedMentions;
+    content?: string;
+    embeds?: EmbedOptions;
+    flags?: number;
+    tts?: boolean;
+    type: number;
+  };
+
+  type InteractionContent = Pick<InteractionOptions, "content" | "embeds" | "flags" | "allowedMentions" | "tts">;
+
+  interface InteractionWebhookContent {
+    allowedMentions?: AllowedMentions;
+    content?: string;
+    embeds?: EmbedOptions[];
+    file?: MessageFile | MessageFile[];
+    flags?: number;
+    tts?: boolean;
+  }
+
   // Cache
   type Uncached = { id: string };
 
@@ -57,7 +78,7 @@ declare namespace Eris {
   type MessageContentEdit = string | AdvancedMessageContentEdit;
   type MFALevel = 0 | 1;
   type PossiblyUncachedMessage = Message | { channel: TextableChannel | { id: string; guild?: Uncached }; guildID?: string; id: string };
-  type InteractionType = 1 | 2;
+  type InteractionType = 1 | 2 | 3;
 
   // Permission
   type PermissionType = 0 | 1;
@@ -535,6 +556,7 @@ declare namespace Eris {
     (event: "guildUnavailable" | "unavailableGuildCreate", listener: (guild: UnavailableGuild) => void): T;
     (event: "guildUpdate", listener: (guild: Guild, oldGuild: OldGuild) => void): T;
     (event: "hello", listener: (trace: string[], id: number) => void): T;
+    (event: "interactionCreate", listener: (interaction: Interaction) => void): T;
     (event: "inviteCreate" | "inviteDelete", listener: (guild: Guild, invite: Invite) => void): T;
     (event: "messageCreate", listener: (message: Message<PossiblyUncachedTextableChannel>) => void): T;
     (event: "messageDelete" | "messageReactionRemoveAll", listener: (message: PossiblyUncachedMessage) => void): T;
@@ -1099,6 +1121,7 @@ declare namespace Eris {
     content?: string;
     embeds?: EmbedOptions[];
     file?: MessageFile | MessageFile[];
+    flags?: number;
     threadID?: string;
     tts?: boolean;
     username?: string;
@@ -1678,6 +1701,7 @@ declare namespace Eris {
     createGuildEmoji(guildID: string, options: EmojiOptions, reason?: string): Promise<Emoji>;
     createGuildFromTemplate(code: string, name: string, icon?: string): Promise<Guild>;
     createGuildTemplate(guildID: string, name: string, description?: string | null): Promise<GuildTemplate>;
+    createInteractionResponse(interactionID: string, interactionToken: string, options: InteractionOptions): Promise<void>;
     createMessage(channelID: string, content: MessageContent, file?: MessageFile | MessageFile[]): Promise<Message>;
     createRole(guildID: string, options?: RoleOptions | Role, reason?: string): Promise<Role>;
     createStageInstance(channelID: string, options: StageInstanceOptions): Promise<StageInstance>;
@@ -2166,6 +2190,33 @@ declare namespace Eris {
     unbanMember(userID: string, reason?: string): Promise<void>;
   }
 
+  export class Interaction {
+    applicationId: string;
+    channelId: string;
+    data?: {
+      componentType?: number;
+      id?: string;
+      custom_id?: string;
+      name?: string;
+      options?: { name?: string; value: string }
+    };
+    guildId?: string;
+    id: string;
+    member: Member;
+    message: Message;
+    token: string;
+    type: number;
+    version: number;
+    acknowledge(): Promise<void>;
+    createFollowup(content: string | InteractionWebhookContent): Promise<Message<GuildTextableChannel>>;
+    createMessage(content: string | InteractionContent): Promise<void>;
+    defer(flags: number): Promise<void>;
+    deferUpdate(): Promise<void>;
+    delete(messageId: string): Promise<void>;
+    edit(messageId: string, content: string | MessageWebhookContent): Promise<Message<GuildTextableChannel>>;
+    editParent(content: MessageWebhookContent): Promise<Message<GuildTextableChannel>>;
+  }
+
   export class GuildAuditLogEntry extends Base {
     actionType: number;
     after: { [key: string]: unknown } | null;
@@ -2281,10 +2332,10 @@ declare namespace Eris {
     guild: CT extends "withMetadata"
       ? Guild // Invite with Metadata always has guild prop
       : CH extends Extract<InviteChannel, GroupChannel> // Invite without Metadata
-        ? never // If the channel is GroupChannel, there is no guild
-        : CH extends Exclude<InviteChannel, InvitePartialChannel> // Invite without Metadata and not GroupChanel
-          ? Guild // If the invite channel is not partial
-          : Guild | undefined; // If the invite channel is partial
+      ? never // If the channel is GroupChannel, there is no guild
+      : CH extends Exclude<InviteChannel, InvitePartialChannel> // Invite without Metadata and not GroupChanel
+      ? Guild // If the invite channel is not partial
+      : Guild | undefined; // If the invite channel is partial
     inviter?: User;
     maxAge: CT extends "withMetadata" ? number : null;
     maxUses: CT extends "withMetadata" ? number : null;
@@ -2475,7 +2526,7 @@ declare namespace Eris {
     unpinMessage(messageID: string): Promise<void>;
     unsendMessage(messageID: string): Promise<void>;
   }
-  
+
   export class PrivateThreadChannel extends ThreadChannel {
     type: 12;
     createMessage(content: AdvancedMessageContent, file?: MessageFile | MessageFile): Promise<Message<PrivateThreadChannel>>;
@@ -2686,7 +2737,7 @@ declare namespace Eris {
     createMessage(content: MessageContent, file?: MessageFile | MessageFile[]): Promise<Message<TextChannel>>;
     createThreadWithoutMessage(options: CreateThreadWithoutMessageOptions): Promise<PrivateThreadChannel>;
     createThreadWithMessage(messageID: string, options: CreateThreadOptions): Promise<PublicThreadChannel>;
-    createWebhook(options: { name: string; avatar?: string | null}, reason?: string): Promise<Webhook>;
+    createWebhook(options: { name: string; avatar?: string | null }, reason?: string): Promise<Webhook>;
     deleteMessage(messageID: string, reason?: string): Promise<void>;
     deleteMessages(messageIDs: string[], reason?: string): Promise<void>;
     edit(options: Omit<EditChannelOptions, "icon" | "ownerID">, reason?: string): Promise<this>;
